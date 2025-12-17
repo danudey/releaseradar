@@ -1,6 +1,6 @@
 # ReleaseRadar
 
-[![[cloudflarebutton]]](https://deploy.workers.cloudflare.com)
+[![[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/danudey/releaseradar)]](https://deploy.workers.cloudflare.com)
 
 A mission-control style dashboard for tracking internal **hashreleases** (builds from commits) and managing the lifecycle of public **releases** across Open Source and Enterprise projects. Features interactive progress tracking, high-density data visualization, and real-time status updates.
 
@@ -83,7 +83,7 @@ Deploy to Cloudflare Workers with full-stack support (frontend + backend + DO st
 bun run deploy
 ```
 
-[![[cloudflarebutton]]](https://deploy.workers.cloudflare.com)
+[![[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/danudey/releaseradar)]](https://deploy.workers.cloudflare.com)
 
 - **Assets**: Static frontend served via SPA mode.
 - **Bindings**: Single `GlobalDurableObject` (managed automatically).
