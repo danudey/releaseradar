@@ -8,7 +8,7 @@
 const fs = require('fs');
 const { execSync } = require('child_process');
 
-const PROJECT_NAME = "release-radar-qj7ljik9mgeuya7kwi4e1";
+const PROJECT_NAME = "release-radar";
 const BOOTSTRAP_MARKER = '.bootstrap-complete';
 
 // Check if already bootstrapped
