@@ -4,7 +4,7 @@
  */
  {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "release-radar-qj7ljik9mgeuya7kwi4e1",
+	"name": "release-radar",
 	"main": "worker/index.ts",
 	"compatibility_date": "2025-04-24",
 	"assets": {
