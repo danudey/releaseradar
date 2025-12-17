@@ -1,138 +1,108 @@
-// Home page of the app.
-// Currently a demo placeholder "please wait" screen.
-// Replace this file with your actual app UI. Do not delete it to use some other file as homepage. Simply replace the entire contents of this file.
-
-import { useEffect, useMemo, useState } from 'react'
-import { Sparkles } from 'lucide-react'
-
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { HAS_TEMPLATE_DEMO, TemplateDemo } from '@/components/TemplateDemo'
-import { Button } from '@/components/ui/button'
-import { Toaster, toast } from '@/components/ui/sonner'
-
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
+import { useQuery } from '@tanstack/react-query';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { api } from '@/lib/api-client';
+import type { Hashrelease, Release, ProjectId } from '@shared/types';
+import { HashreleaseCard, ReleaseCard, ProjectIcon } from '@/components/release-widgets';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { useEffect } from 'react';
+import { useTheme } from '@/hooks/use-theme';
+interface DashboardData {
+  oss: {
+    releases: Release[];
+    hashreleases: Hashrelease[];
+  };
+  enterprise: {
+    releases: Release[];
+    hashreleases: Hashrelease[];
+  };
 }
-
-export function HomePage() {
-  const [coins, setCoins] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const [elapsedMs, setElapsedMs] = useState(0)
-
-  useEffect(() => {
-    if (!isRunning || startedAt === null) return
-
-    const t = setInterval(() => {
-      setElapsedMs(Date.now() - startedAt)
-    }, 250)
-
-    return () => clearInterval(t)
-  }, [isRunning, startedAt])
-
-  const formatted = useMemo(() => formatDuration(elapsedMs), [elapsedMs])
-
-  const onPleaseWait = () => {
-    setCoins((c) => c + 1)
-
-    if (!isRunning) {
-      // Resume from the current elapsed time
-      setStartedAt(Date.now() - elapsedMs)
-      setIsRunning(true)
-      toast.success('Building your app…', {
-        description: "Hang tight — we're setting everything up.",
-      })
-      return
-    }
-
-    setIsRunning(false)
-    toast.info('Still working…', {
-      description: 'You can come back in a moment.',
-    })
-  }
-
-  const onReset = () => {
-    setCoins(0)
-    setIsRunning(false)
-    setStartedAt(null)
-    setElapsedMs(0)
-    toast('Reset complete')
-  }
-
-  const onAddCoin = () => {
-    setCoins((c) => c + 1)
-    toast('Coin added')
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-hidden relative">
-      <ThemeToggle />
-      <div className="absolute inset-0 bg-gradient-rainbow opacity-10 dark:opacity-20 pointer-events-none" />
-
-      <div className="text-center space-y-8 relative z-10 animate-fade-in w-full">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
-            <Sparkles className="w-8 h-8 text-white rotating" />
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
-            Creating your <span className="text-gradient">app</span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto text-pretty">
-            Your application would be ready soon.
-          </p>
-        </div>
-
-        {HAS_TEMPLATE_DEMO ? (
-          <div className="max-w-5xl mx-auto text-left">
-            <TemplateDemo />
-          </div>
-        ) : (
-          <>
-            <div className="flex justify-center gap-4">
-              <Button
-                size="lg"
-                onClick={onPleaseWait}
-                className="btn-gradient px-8 py-4 text-lg font-semibold hover:-translate-y-0.5 transition-all duration-200"
-                aria-live="polite"
-              >
-                Please Wait
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-              <div>
-                Time elapsed:{' '}
-                <span className="font-medium tabular-nums text-foreground">{formatted}</span>
-              </div>
-              <div>
-                Coins:{' '}
-                <span className="font-medium tabular-nums text-foreground">{coins}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-2">
-              <Button variant="outline" size="sm" onClick={onReset}>
-                Reset
-              </Button>
-              <Button variant="outline" size="sm" onClick={onAddCoin}>
-                Add Coin
-              </Button>
-            </div>
-          </>
-        )}
+const ProjectSectionSkeleton = () => (
+  <div className="space-y-6">
+    <Skeleton className="h-8 w-48" />
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-32" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
       </div>
-
-      <footer className="absolute bottom-8 text-center text-muted-foreground/80">
-        <p>Powered by Cloudflare</p>
-      </footer>
-
-      <Toaster richColors closeButton />
     </div>
-  )
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-40" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 rounded-lg" />)}
+      </div>
+    </div>
+  </div>
+);
+const ProjectSection = ({ projectId, name, data }: { projectId: ProjectId; name: string; data: DashboardData[ProjectId] }) => (
+  <div className="space-y-8">
+    <h2 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
+      <ProjectIcon projectId={projectId} className="h-8 w-8" />
+      {name}
+    </h2>
+    <div>
+      <h3 className="text-xl font-semibold mb-4">Latest Releases</h3>
+      {data.releases.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          {data.releases.map(release => <ReleaseCard key={release.id} release={release} />)}
+        </div>
+      ) : <p className="text-muted-foreground">No releases found.</p>}
+    </div>
+    <div>
+      <h3 className="text-xl font-semibold mb-4">Recent Hashreleases</h3>
+      {data.hashreleases.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          {data.hashreleases.map(hr => <HashreleaseCard key={hr.id} hashrelease={hr} />)}
+        </div>
+      ) : <p className="text-muted-foreground">No hashreleases found.</p>}
+    </div>
+  </div>
+);
+export function HomePage() {
+  const { isDark, toggleTheme } = useTheme();
+  useEffect(() => {
+    if (!isDark) {
+      toggleTheme(); // Force dark mode
+    }
+  }, [isDark, toggleTheme]);
+  const { data, isLoading, error } = useQuery<DashboardData>({
+    queryKey: ['dashboardData'],
+    queryFn: () => api('/api/dashboard'),
+  });
+  return (
+    <AppLayout>
+      <div className="relative min-h-screen bg-background">
+        <ThemeToggle className="absolute top-6 right-6" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <header className="mb-12">
+            <h1 className="text-5xl font-extrabold tracking-tighter text-foreground">Mission Control</h1>
+            <p className="text-lg text-muted-foreground mt-2">A high-level overview of all release activities.</p>
+          </header>
+          {isLoading && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <ProjectSectionSkeleton />
+              <ProjectSectionSkeleton />
+            </div>
+          )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                Failed to load dashboard data. Please try again later.
+              </AlertDescription>
+            </Alert>
+          )}
+          {data && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+              <ProjectSection projectId="oss" name="Open Source" data={data.oss} />
+              <ProjectSection projectId="enterprise" name="Enterprise" data={data.enterprise} />
+            </div>
+          )}
+        </div>
+      </div>
+    </AppLayout>
+  );
 }

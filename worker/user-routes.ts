@@ -1,75 +1,73 @@
 import { Hono } from "hono";
 import type { Env } from './core-utils';
-import { UserEntity, ChatBoardEntity } from "./entities";
+import { HashreleaseEntity, ReleaseEntity } from "./entities";
 import { ok, bad, notFound, isStr } from './core-utils';
-
+import type { ProjectId, StepStatus } from "@shared/types";
+const VALID_PROJECT_IDS: ProjectId[] = ['oss', 'enterprise'];
+const VALID_STEP_STATUSES: StepStatus[] = ['pending', 'in-progress', 'done', 'error'];
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
-  app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
-
-  // USERS
-  app.get('/api/users', async (c) => {
-    await UserEntity.ensureSeed(c.env);
-    const cq = c.req.query('cursor');
-    const lq = c.req.query('limit');
-    const page = await UserEntity.list(c.env, cq ?? null, lq ? Math.max(1, (Number(lq) | 0)) : undefined);
-    return ok(c, page);
+  // Ensure data is seeded on first load
+  app.use('/api/*', async (c, next) => {
+    await HashreleaseEntity.ensureSeed(c.env);
+    await ReleaseEntity.ensureSeed(c.env);
+    await next();
   });
-
-  app.post('/api/users', async (c) => {
-    const { name } = (await c.req.json()) as { name?: string };
-    if (!name?.trim()) return bad(c, 'name required');
-    return ok(c, await UserEntity.create(c.env, { id: crypto.randomUUID(), name: name.trim() }));
+  // GET all hashreleases, optionally filtered by projectId
+  app.get('/api/hashreleases', async (c) => {
+    const projectId = c.req.query('projectId') as ProjectId | undefined;
+    const { items } = await HashreleaseEntity.list(c.env, null, 100); // Fetch all for simplicity
+    const filtered = projectId ? items.filter(hr => hr.projectId === projectId) : items;
+    return ok(c, filtered);
   });
-
-  // CHATS
-  app.get('/api/chats', async (c) => {
-    await ChatBoardEntity.ensureSeed(c.env);
-    const cq = c.req.query('cursor');
-    const lq = c.req.query('limit');
-    const page = await ChatBoardEntity.list(c.env, cq ?? null, lq ? Math.max(1, (Number(lq) | 0)) : undefined);
-    return ok(c, page);
+  // GET all releases, optionally filtered by projectId
+  app.get('/api/releases', async (c) => {
+    const projectId = c.req.query('projectId') as ProjectId | undefined;
+    const { items } = await ReleaseEntity.list(c.env, null, 100); // Fetch all
+    const filtered = projectId ? items.filter(r => r.projectId === projectId) : items;
+    return ok(c, filtered);
   });
-
-  app.post('/api/chats', async (c) => {
-    const { title } = (await c.req.json()) as { title?: string };
-    if (!title?.trim()) return bad(c, 'title required');
-    const created = await ChatBoardEntity.create(c.env, { id: crypto.randomUUID(), title: title.trim(), messages: [] });
-    return ok(c, { id: created.id, title: created.title });
+  // GET a specific release by ID
+  app.get('/api/releases/:id', async (c) => {
+    const { id } = c.req.param();
+    const release = new ReleaseEntity(c.env, id);
+    if (!await release.exists()) return notFound(c, 'Release not found');
+    return ok(c, await release.getState());
   });
-
-  // MESSAGES
-  app.get('/api/chats/:chatId/messages', async (c) => {
-    const chat = new ChatBoardEntity(c.env, c.req.param('chatId'));
-    if (!await chat.exists()) return notFound(c, 'chat not found');
-    return ok(c, await chat.listMessages());
+  // GET a specific hashrelease by ID
+  app.get('/api/hashreleases/:id', async (c) => {
+    const { id } = c.req.param();
+    const hashrelease = new HashreleaseEntity(c.env, id);
+    if (!await hashrelease.exists()) return notFound(c, 'Hashrelease not found');
+    return ok(c, await hashrelease.getState());
   });
-
-  app.post('/api/chats/:chatId/messages', async (c) => {
-    const chatId = c.req.param('chatId');
-    const { userId, text } = (await c.req.json()) as { userId?: string; text?: string };
-    if (!isStr(userId) || !text?.trim()) return bad(c, 'userId and text required');
-    const chat = new ChatBoardEntity(c.env, chatId);
-    if (!await chat.exists()) return notFound(c, 'chat not found');
-    return ok(c, await chat.sendMessage(userId, text.trim()));
+  // PATCH to update a release step's status
+  app.patch('/api/releases/:id/step', async (c) => {
+    const { id } = c.req.param();
+    const { stepName, status } = await c.req.json<{ stepName?: string; status?: StepStatus }>();
+    if (!isStr(stepName) || !status || !VALID_STEP_STATUSES.includes(status)) {
+      return bad(c, 'A valid stepName and status are required.');
+    }
+    const release = new ReleaseEntity(c.env, id);
+    if (!await release.exists()) return notFound(c, 'Release not found');
+    const updatedRelease = await release.updateStepStatus(stepName, status);
+    return ok(c, updatedRelease);
   });
-
-  // DELETE: Users
-  app.delete('/api/users/:id', async (c) => ok(c, { id: c.req.param('id'), deleted: await UserEntity.delete(c.env, c.req.param('id')) }));
-
-  app.post('/api/users/deleteMany', async (c) => {
-    const { ids } = (await c.req.json()) as { ids?: string[] };
-    const list = ids?.filter(isStr) ?? [];
-    if (list.length === 0) return bad(c, 'ids required');
-    return ok(c, { deletedCount: await UserEntity.deleteMany(c.env, list), ids: list });
-  });
-
-  // DELETE: Chats
-  app.delete('/api/chats/:id', async (c) => ok(c, { id: c.req.param('id'), deleted: await ChatBoardEntity.delete(c.env, c.req.param('id')) }));
-
-  app.post('/api/chats/deleteMany', async (c) => {
-    const { ids } = (await c.req.json()) as { ids?: string[] };
-    const list = ids?.filter(isStr) ?? [];
-    if (list.length === 0) return bad(c, 'ids required');
-    return ok(c, { deletedCount: await ChatBoardEntity.deleteMany(c.env, list), ids: list });
+  // Summary endpoint for the dashboard
+  app.get('/api/dashboard', async (c) => {
+    const [allReleases, allHashreleases] = await Promise.all([
+      ReleaseEntity.list(c.env, null, 100).then(p => p.items),
+      HashreleaseEntity.list(c.env, null, 100).then(p => p.items)
+    ]);
+    const data = {
+      oss: {
+        releases: allReleases.filter(r => r.projectId === 'oss').sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 5),
+        hashreleases: allHashreleases.filter(hr => hr.projectId === 'oss').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
+      },
+      enterprise: {
+        releases: allReleases.filter(r => r.projectId === 'enterprise').sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 5),
+        hashreleases: allHashreleases.filter(hr => hr.projectId === 'enterprise').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
+      }
+    };
+    return ok(c, data);
   });
 }
